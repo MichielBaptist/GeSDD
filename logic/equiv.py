@@ -36,3 +36,11 @@ class equiv(factor):
                 return False #One detected that is not the same value!
             
         return True
+        
+    def __eq__(self, other):
+        if not isinstance(other, equiv):
+            return False
+            
+        return self.list_of_factors == other.list_of_factors
+        
+    pass

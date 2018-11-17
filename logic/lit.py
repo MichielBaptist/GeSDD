@@ -31,3 +31,9 @@ class lit(factor):
         
     def is_literal(self):
         return True
+        
+    def __eq__(self, other):
+        if not isinstance(other, lit):
+            return False
+            
+        return self.literal_int == other.literal_int

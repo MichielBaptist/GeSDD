@@ -17,4 +17,7 @@ class factor:
     def is_literal(self):
         return False
     
+    def __eq__(self, other):
+        return False
+        
     pass

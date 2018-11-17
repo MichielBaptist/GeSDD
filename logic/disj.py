@@ -23,3 +23,10 @@ class disj(factor):
                 return True
         return False
 
+    def __eq__(self, other):
+        if not isinstance(other, disj):
+            return False
+            
+        return self.list_of_factors == other.list_of_factors
+        
+    pass

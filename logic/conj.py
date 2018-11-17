@@ -22,5 +22,11 @@ class conj(factor):
             if factor.evaluate(world) == False:
                 return False
         return True
+        
+    def __eq__(self, other):
+        if not isinstance(other, conj):
+            return False
+            
+        return self.list_of_factors == other.list_of_factors
     
     pass

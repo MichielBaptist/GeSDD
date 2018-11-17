@@ -1,6 +1,7 @@
 import pysdd
 from gen.gen import generator
 from model.model import Model
+import random
 
 class cross_over:
     def cross(self, model1, model2) -> Model:
@@ -32,4 +33,18 @@ class add_mutation(mutation):
         
         return model
         
+class remove_mutation(mutation):
+    def __init__(self):
+        pass
         
+    def mutate(self, model):
+        
+        features = model.get_features()
+        random_rem = select_random_element(features)
+        
+        model.remove_factor(random_rem)
+        
+        return model
+        
+def select_random_element(elements):
+    return random.choice(elements)

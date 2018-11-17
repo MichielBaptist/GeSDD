@@ -14,9 +14,10 @@ from matplotlib import pyplot as plt
 
 def __main__():
 
-    mutation = add_mutation()
+    amutation = add_mutation()
+    rmutation = remove_mutation()
     vrs = 3
-    max_nb_f = 5
+    max_nb_f = 10
     
     left = Model(3)
     right = Model(3)
@@ -26,13 +27,19 @@ def __main__():
     left.set_manager(mgr)
     right.set_manager(mgr)
     
-    mutation.mutate(right)
-    mutation.mutate(right)
+    amutation.mutate(right)
+    amutation.mutate(right)
+    print(right.to_string())
+    
+    Source(right.sdd.dot()).render(view=True)
+    
+    rmutation.mutate(right)
+    rmutation.mutate(right)
     
     print(right.to_string())
     
-if __name__ == "__main__":
-    __main__()
+    Source(right.sdd.dot()).render(view=True)
+    
     
 def script1():
     gen_n = 100
@@ -71,3 +78,7 @@ def script1():
     plt.plot([0], [lla], "go")
     
     plt.show()
+    
+    
+if __name__ == "__main__":
+    __main__()

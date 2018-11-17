@@ -26,7 +26,8 @@ class Model:
     """
     
     # --------------------- init stuff --------------------
-    def __init__(self, domain_size, manager = None, dynamic_update=False, max_nb_factors=10):
+    def __init__(self, domain_size, manager = None, dynamic_update=False, max_nb_factors=10,
+                    pool_range = None):
         # Method must get a manager! 
         self.factors = []              # List of (formula, weight, encoding, indicator) pairs. endocing contains SDD
         self.factor_stack = []         # List of (formula, weight) pairs to be added to the SDD
@@ -53,7 +54,13 @@ class Model:
             self.add_literal_factor(lit(i + 1))
 
     def initialize_availability(self):
-        self.availability = [True] * self.max_nb_factors
+        self.availability = {}
+        bottom = self.domain_size + 1
+        top = self.domain_size + 1 + self.max_nb_factors
+        for i in range(bottom, top):
+            self.availability[i] = True
+            
+        print(self.availability)
         
     # ------------------ Training ----------------
     
@@ -160,17 +167,43 @@ class Model:
         if self.dynamic_update:                     # Only when dynamically updating we should change the SDD
             self.update_sdd()
             
-    def remove_factor_sdd(self, factor):                         # This method assumes that the factor is already sdd'd
-        
-        if self.is_literal_index(factor):
+    def remove_factor(self, factor):
+        if not self.factor_present(factor):
             return
+            
+        self.remove_factor_sdd_indicator(factor[3])    # TODO: remove hard coding
+    
+    def remove_factor_sdd_indicator(self, indicator):
         
-        indicator_for_factor = self.get_factor_by_index(factor)  # Get the indicator so we can condition the SDD
-        self.factors.pop(factor)                                 # remove the factor from the list
-        self.condition_on_factor(indicator_for_factor)           # Condition on factors indicator so it get's removed
-        self.free_variable(indicator_for_factor)
-        
+        if self.ind_is_literal(indicator):
+            return
+            
+        self.pop_factor_indicator(indicator)                              
+        self.condition_on_factor(indicator)           
+        self.free_variable(indicator)        
         self.dirty = True
+        
+    def remove_factor_sdd_index(self, index):
+    
+        indicator_for_factor = self.get_factor_by_index(factor)       
+        self.remove_factor_sdd_indicator(indicator_for_factor)
+        
+    def pop_factor_indicator(self, indicator):
+        #TODO: efficiency
+        factor = self.factor_by_indicator(indicator)
+        self.factors = [(f, w, e, i) for (f, w, e, i) in self.factors if i != indicator] 
+        return factor
+        
+    def factor_by_indicator(self, indicator):
+        factors_by_ind = [(f, w, e, i) for (f, w, e, i) in self.factors if i == indicator]
+        
+        if len(factors_by_ind) == 0:
+            return None
+            
+        if len(factors_by_ind) > 1:
+            print(f"Found multiple factors with indicator {indicator}")
+            
+        return factors_by_ind[0]
         
     def condition_on_factor(self, indicator):
         # (F_1 <=> I_1 & F_2 <=> I_2) | (F_1 <=> I_1 & F_2 <=> -I_2) == F_1 <=> I_1
@@ -230,28 +263,44 @@ class Model:
         return encoding, next_var
         
     def can_add_factors(self):
-        return sum(self.availability) > 0
+        return self.nb_factors < self.max_nb_factors
     
-    def free_variable(self, variable):
-        index = variable - self.domain_size - 1
-        self.availability[index] = True
-        
     def next_available_variable(self):
         
-        i = 0
-        while not self.availability[i]:
-            i += 1
+        # Get available pool
+        pool = self.get_available_pool(self.availability)
         
-        if i > self.max_nb_factors:
+        # No more left
+        if len(pool) <= 0:
             print("No more factors available")
             return 
         
-        next_var = self.domain_size + i + 1
-        self.availability[i] = False
+        # Choose one at random
+        next_indicator = random.choice(pool)
         
-        self.nb_factors = sum(self.availability)
+        # Claim this indicator
+        self.claim_variable(next_indicator)
+        
+        # Count how many are free
+        self.nb_factors = len(self.get_unavailable_pool(self.availability))
             
-        return next_var
+        # Done
+        return next_indicator
+        
+        
+    def claim_variable(self, indicator):
+        self.availability[indicator] = False
+        
+    def free_variable(self, indicator):
+        self.availability[indicator] = True
+        
+    def get_available_pool(self, availability):
+        print(availability)
+        return [ind for (ind, available) in availability.items() if available]
+        
+    def get_unavailable_pool(self, availability):
+        print(availability)
+        return [ind for (ind, available) in availability.items() if not available]
 
     def check_manager(self):           
         if self.mgr == None:
@@ -266,6 +315,15 @@ class Model:
             manager = SddManager(self.domain_size)
         self.mgr = manager
         self.dynamic_update = True
+        
+    def ind_is_literal(self, indicator):
+        return indicator <= self.domain_size
+        
+    def feat_is_literal(self, feat):
+        return self.ind_is_literal(feat[3])  # TODO:make not hard-coded.
+        
+    def factor_present(self, factor):
+        return factor in self.factors
     
     # ------------------ Information ------------------------
     
@@ -276,7 +334,7 @@ class Model:
         self.factors = [(f, nw, e, i) for ((f,_,e,i), nw) in zip(self.factors, weights)]
     
     def get_factor_by_index(self, index):
-        return self.factors[index][3] #Hard coded indicator car is 3
+        return self.factors[index][3] #Hard coded indicator car is 3 #TODO: make not hard-coded.
     
     def get_factor_weights(self):
         # gets only the weights of the encoded factors
@@ -314,6 +372,9 @@ class Model:
     
     def get_w(self):
         return [w for (_, w, _, _) in self.factors]
+        
+    def get_features(self):
+        return list(filter(lambda e : not self.feat_is_literal(e), self.factors))
 
     def all_indicators(self):
         return range(self.domain_size + 1, self.mgr.var_count() + 1)

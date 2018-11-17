@@ -16,3 +16,9 @@ class cons(factor):
     
     def evaluate(self, world):
         return self.boolean_val
+        
+    def __eq__(self, other):
+        if not isinstance(other, cons):
+            return False
+            
+        return self.boolean_val == other.boolean_val
