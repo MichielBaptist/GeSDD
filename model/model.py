@@ -62,6 +62,16 @@ class Model:
         top = bottom + max_number_factors
         return indicator_manager(range(bottom, top))
         
+    def from_pre_compiled_sdd(self, sdd, factors):
+        if self.sdd != None:
+            print("Model has sdd already!")
+        if self.nb_factors > 0:
+            print("Model has factors already!")
+            
+        self.factors = factors
+        self.nb_factors = len(factors)
+        self.sdd = sdd
+        
     # ------------------ Training ----------------
     
     def fit(self, worlds):
@@ -234,7 +244,7 @@ class Model:
             t2 = time()
             
             left = self.sdd                                    # Current SDD
-            right = e.to_sdd(self.mgr)                         # Compile new factor to SDD
+            right = e.compile(self.mgr)                         # Compile new factor to SDD
             
             t3=time()
             self.sdd = left & right           # Do the actual conjoining here
@@ -343,9 +353,6 @@ class Model:
     def get_iw(self):
         return [(i,w) for (_,w,_,i) in self.factors]
     
-    def get_f(self):
-        return [f for (f,_,_,_) in self.factors]
-    
     def get_w(self):
         return [w for (_, w, _, _) in self.factors]
         
@@ -411,7 +418,7 @@ class Model:
         ln_Z = self.partition()
         
         weights = self.get_w()
-        counts = self.count(self.get_f(), worlds)
+        counts = self.count(self.get_factors(), worlds)
         ln_Z = self.Z
         
         self.ll = self.ll_calc(weights, counts, ln_Z)

@@ -12,13 +12,45 @@ from datio import IO_manager
 from graphviz import Source
 from pysdd.sdd import SddManager
 from ga.operations import *
+from logic.conj import conj
+from logic.disj import disj
+from logic.lit  import lit
+from logic.cons import cons
+from logic.factor import factor
+from logic.equiv import equiv
 
 from matplotlib import pyplot as plt
 
 from model.indicator_manager import indicator_manager
 
 def __main__():
-    pass
+    n_vars = 10
+    max_n_factors = 10
+    bot = n_vars + 1
+    top = bot + max_n_factors
+    cross = simple_subset_cross()
+    
+    mgr = SddManager(top)
+    imgr  = indicator_manager(range(bot, top))
+    
+    left = Model(n_vars, imgr, mgr, True)
+    right = Model(n_vars, imgr, mgr, True)
+    
+    c1 = conj([lit(1), lit(2), lit(3)])
+    d1 = disj([lit(-3), lit(-2), lit(5)])
+    e1 = equiv([lit(1), lit(-6)])
+    c2 = conj([lit(4), lit(2)])
+    
+    left.add_factor(c1)
+    left.add_factor(e1)
+    
+    right.add_factor(c2)
+    right.add_factor(d1)
+    
+    print(right.to_string())
+    print(left.to_string())
+    
+    new_left, new_right = cross.cross(left, right)
     
 def script2():
 
