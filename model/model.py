@@ -20,13 +20,15 @@ from logic.cons import cons
 from logic.factor import factor
 from logic.equiv import equiv
 
+from model.indicator_manager import indicator_manager
+
 class Model:
     """
     Class representing a logical Theory, just a conjunction of Rules. Each rule has a weight.
     """
     
     # --------------------- init stuff --------------------
-    def __init__(self, domain_size, manager = None, dynamic_update=False, max_nb_factors=10,
+    def __init__(self, domain_size, indicator_manager = None, manager = None, dynamic_update=False, max_nb_factors=10,
                     pool_range = None):
         # Method must get a manager! 
         self.factors = []              # List of (formula, weight, encoding, indicator) pairs. endocing contains SDD
@@ -34,8 +36,8 @@ class Model:
         self.domain_size = domain_size # How many literals can this theory have?
         self.nb_factors = 0
         self.max_nb_factors = max_nb_factors
-        self.availability = None
         
+        self.indicator_manager = indicator_manager
         self.mgr = manager
         self.sdd = None                # Compiled SDD of the encoding (not of conj of factors)
         
@@ -43,24 +45,22 @@ class Model:
         self.dirty = False                    # Is there need for recomputation?
         
         self.add_initial_literals()           # Add the initial factors which give weight to literals A, B, C ....
-        self.initialize_availability()        # To keep track of which variables are available as indicators
         
         # Nothing at start
         self.Z = None
         self.probs = None
+        
+        if self.indicator_manager == None:
+            self. indicator_manager = self.init_indicator_manager(self.domain_size, self.max_nb_factors)
     
     def add_initial_literals(self):
         for i in range(self.domain_size):
             self.add_literal_factor(lit(i + 1))
-
-    def initialize_availability(self):
-        self.availability = {}
-        bottom = self.domain_size + 1
-        top = self.domain_size + 1 + self.max_nb_factors
-        for i in range(bottom, top):
-            self.availability[i] = True
-            
-        print(self.availability)
+    
+    def init_indicator_manager(self, domain_size, max_number_factors):
+        bottom = domain_size + 1
+        top = bottom + max_number_factors
+        return indicator_manager(range(bottom, top))
         
     # ------------------ Training ----------------
     
@@ -81,13 +81,12 @@ class Model:
         
         # 4) Optimize
         res = minimize(objective, x0 = self.get_factor_weights(), jac = None, method="BFGS",
-                      options={'gtol': 1e-2, 'disp': True})
+                      options={'gtol': 1e-1, 'disp': True})
         
         # 5) Set the weights correct!
         self.set_factor_weights(res.x)
         
-        self.dirty = True
-        
+        self.dirty = True        
         self.wmc = None
         
     def objective_function(self, factor_weights):
@@ -158,7 +157,7 @@ class Model:
         
     def add_factor(self, factor, weight=0):
         if not self.can_add_factors():
-            print(f"Cannot add anymore factors, Maximum: {self.max_nb_factors}")
+            print(f"Cannot add anymore factors.")
             return
         
         enc, ind = self.encode_factor(factor)
@@ -167,12 +166,15 @@ class Model:
         if self.dynamic_update:                     # Only when dynamically updating we should change the SDD
             self.update_sdd()
             
+        self.nb_factors += 1
+            
     def remove_factor(self, factor):
         if not self.factor_present(factor):
             return
             
         self.remove_factor_sdd_indicator(factor[3])    # TODO: remove hard coding
-    
+        self.nb_factors -= 1
+        
     def remove_factor_sdd_indicator(self, indicator):
         
         if self.ind_is_literal(indicator):
@@ -254,54 +256,22 @@ class Model:
         return self.sdd
         
     def encode_factor(self, f):
-        next_var = self.next_available_variable()
+        next_var = self.claim_next_available_variable()
         
         Pi = lit(next_var)              # Get indicator var
         encoding = equiv([f,Pi])        # Create encoding
         
-        
         return encoding, next_var
         
     def can_add_factors(self):
-        return self.nb_factors < self.max_nb_factors
+        return self.nb_factors < self.max_nb_factors and self.indicator_manager.has_next()
     
-    def next_available_variable(self):
-        
-        # Get available pool
-        pool = self.get_available_pool(self.availability)
-        
-        # No more left
-        if len(pool) <= 0:
-            print("No more factors available")
-            return 
-        
-        # Choose one at random
-        next_indicator = random.choice(pool)
-        
-        # Claim this indicator
-        self.claim_variable(next_indicator)
-        
-        # Count how many are free
-        self.nb_factors = len(self.get_unavailable_pool(self.availability))
-            
-        # Done
-        return next_indicator
-        
-        
-    def claim_variable(self, indicator):
-        self.availability[indicator] = False
-        
-    def free_variable(self, indicator):
-        self.availability[indicator] = True
-        
-    def get_available_pool(self, availability):
-        print(availability)
-        return [ind for (ind, available) in availability.items() if available]
-        
-    def get_unavailable_pool(self, availability):
-        print(availability)
-        return [ind for (ind, available) in availability.items() if not available]
+    def claim_next_available_variable(self):        
+        return self.indicator_manager.claim_next_available_variable()
 
+    def free_variable(self, indicator):
+        self.indicator_manager.free_variable(indicator)
+        
     def check_manager(self):           
         if self.mgr == None:
             print("Cannot compile without a manager")
@@ -309,6 +279,12 @@ class Model:
         
     def validate_factor(self, factor):
         return True
+        
+    def set_indicator_manager(self, indicator_manager):
+        if self.nb_factors > 0:
+            assert("Cannot change indicator_manager after already using indicators from another manager")
+            
+        self.indicator_manager = indicator_manager
         
     def set_manager(self, manager=None):
         if manager == None:
@@ -432,8 +408,7 @@ class Model:
         return [(e.to_string(),math.exp(p)) for (e,p) in zip(encodings, self.probs)]
         
     def LL(self, worlds):
-        if self.dirty:
-            self.partition()
+        ln_Z = self.partition()
         
         weights = self.get_w()
         counts = self.count(self.get_f(), worlds)
@@ -471,7 +446,6 @@ class Model:
         pp += self.pretty_print_table(self.get_fwi())
         pp += "Uncompiled factors:\n"
         pp += self.pretty_print_table(self.factor_stack)
-        pp += f"Available indicators: {self.availability}\n"
         #pp += "Weights of literals:\n"
         #pp += self.pretty_weights()
         
