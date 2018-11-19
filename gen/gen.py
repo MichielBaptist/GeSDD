@@ -24,7 +24,7 @@ from logic.equiv import equiv
 
 class generator:
     
-    def __init__(self, domain_size, indicator_manager, fn_sparseness = 0.25, operation_distr = [20,4,1], min_feature_size = 2, feature_size_factor=1.5, subgroup_size_factor = 1.0, remove_after_select_p = 0.95, negation_prob = 0.5, max_nb_factors = 10):
+    def __init__(self, domain_size, indicator_manager, manager = None, fn_sparseness = 0.25, operation_distr = [20,4,1], min_feature_size = 2, feature_size_factor=1.5, subgroup_size_factor = 1.0, remove_after_select_p = 0.95, negation_prob = 0.5, max_nb_factors = 10):
         self.domain_size = domain_size
         self.feature_number_sparseness = fn_sparseness
         self.operation_distr = [x/sum(operation_distr) for x in operation_distr]
@@ -35,6 +35,7 @@ class generator:
         self.negation_prob = negation_prob
         self.max_nb_factors = max_nb_factors
         self.indicator_manager = indicator_manager
+        self.manager = manager
         pass
     
     def set_domain_size(self, domain_size):
@@ -47,6 +48,7 @@ class generator:
     def gen(self):
         modl = Model(self.domain_size, max_nb_factors = self.max_nb_factors)
         modl.set_indicator_manager(self.indicator_manager)
+        modl.set_manager(self.manager)
         
         # 1) Select the number of features 
         n_factors = self.random_feature_n()

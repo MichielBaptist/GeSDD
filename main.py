@@ -11,7 +11,10 @@ from datio import IO_manager
 
 from graphviz import Source
 from pysdd.sdd import SddManager
+
 from ga.operations import *
+import ga.fitness
+
 from logic.conj import conj
 from logic.disj import disj
 from logic.lit  import lit
@@ -24,33 +27,34 @@ from matplotlib import pyplot as plt
 from model.indicator_manager import indicator_manager
 
 def __main__():
-    n_vars = 10
-    max_n_factors = 10
+    n_vars = 20
+    global_max = 100
+    local_max = 200
     bot = n_vars + 1
-    top = bot + max_n_factors
-    cross = simple_subset_cross()
-    
+    top = bot + global_max
+    cross = simple_subset_cross()    
+    fitness = ga.fitness.SimpleFitness(1, 0.01)
     mgr = SddManager(top)
     imgr  = indicator_manager(range(bot, top))
+    gen = generator(n_vars, imgr, mgr, max_nb_factors = local_max)    
+    data = g.random_data(n_vars, 1000)
     
-    left = Model(n_vars, imgr, mgr, True)
-    right = Model(n_vars, imgr, mgr, True)
-    
-    c1 = conj([lit(1), lit(2), lit(3)])
-    d1 = disj([lit(-3), lit(-2), lit(5)])
-    e1 = equiv([lit(1), lit(-6)])
-    c2 = conj([lit(4), lit(2)])
-    
-    left.add_factor(c1)
-    left.add_factor(e1)
-    
-    right.add_factor(c2)
-    right.add_factor(d1)
+    left = gen.gen()
+    right = gen.gen()
     
     print(right.to_string())
     print(left.to_string())
     
     new_left, new_right = cross.cross(left, right)
+    
+    print(fitness.of(new_left, data))
+    print(fitness.of(new_right, data))
+    
+    new_left.fit(data)
+    new_right.fit(data)
+    
+    print(fitness.of(new_left, data))
+    print(fitness.of(new_right, data))
     
 def script2():
 

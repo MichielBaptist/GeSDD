@@ -68,7 +68,7 @@ class Model:
         if self.nb_factors > 0:
             print("Model has factors already!")
             
-        self.factors = factors
+        self.factors += factors
         self.nb_factors = len(factors)
         self.sdd = sdd
         
@@ -383,9 +383,8 @@ class Model:
             assert("Cannot perform counting without SDD")
         if len(self.factor_stack) > 0:
             print("Be carefull: there are still uncompiled factors in the model.")
-        if not self.dirty: # If not dirty don't re-compute anything
+        if not self.dirty and self.Z != None: # If not dirty don't re-compute anything
             return self.Z
-        
         
         wmc = self.sdd.wmc()        
         wmc = self.set_wmc_weights(wmc)

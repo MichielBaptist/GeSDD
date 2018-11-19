@@ -4,6 +4,8 @@ from model.model import Model
 import random
 import numpy as np
 import time
+from functools import reduce
+from logic.cons import cons
 
 class cross_over:
     def cross(self, model1, model2) -> Model:
@@ -75,15 +77,18 @@ def empty_child(source):
     return Model(domain_size, imgr, mgr)
     
 def split_collection(collection, distr):
+    
     n_sets = len(distr)
+    n_coll = len(collection)
     distr = [i/sum(distr) for i in distr]
     sets = [[] for i in range(n_sets)]
     
-    choices = np.random.choice(range(n_sets), n_sets, distr)
+    choices = np.random.choice(range(n_sets), n_coll, distr)
     
     for (c, f) in zip(choices, collection):
         sets[c].append(f)
         
+    print([len(s) for s in sets])
     return sets
     
     
@@ -99,11 +104,14 @@ def add_and_join(left, right, left_subset, right_subset, target):
     
     target.from_pre_compiled_sdd(conjoined, union)
     
+    return target
+    
 def sdd_from_subset(source, subset):
     # TODO: migrate this stuff to single place
     # TODO: Consider removing factors instead of adding factors
     enc_sdds = [e.get_sdd() for (_,_,e,_) in subset]
-    conjunction = reduce( lambda x, y : x & y, enc_sdds)
+    default_sdd = cons(True).compile(source.mgr)
+    conjunction = reduce( lambda x, y : x & y, enc_sdds, default_sdd)
     return conjunction
     
     
