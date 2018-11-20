@@ -91,7 +91,7 @@ class Model:
         
         # 4) Optimize
         res = minimize(objective, x0 = self.get_factor_weights(), jac = None, method="BFGS",
-                      options={'gtol': 1e-1, 'disp': True})
+                      options={'gtol': 1e-2, 'disp': True})
         
         # 5) Set the weights correct!
         self.set_factor_weights(res.x)

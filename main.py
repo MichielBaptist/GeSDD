@@ -27,34 +27,104 @@ from matplotlib import pyplot as plt
 from model.indicator_manager import indicator_manager
 
 def __main__():
-    n_vars = 20
-    global_max = 100
+    np.random.seed(40)
+    data, struct, n_worlds, n_vars = IO_manager.read_from_names_folder("data/car")
+    global_max = 200
     local_max = 200
     bot = n_vars + 1
     top = bot + global_max
+    n_sdds = 20
+    
     cross = simple_subset_cross()    
     fitness = ga.fitness.SimpleFitness(1, 0.01)
     mgr = SddManager(top)
     imgr  = indicator_manager(range(bot, top))
-    gen = generator(n_vars, imgr, mgr, max_nb_factors = local_max)    
-    data = g.random_data(n_vars, 1000)
+    gen = generator(n_vars, imgr, mgr, max_nb_factors = local_max)
     
-    left = gen.gen()
-    right = gen.gen()
+    models = gen.gen_n(n_sdds)
     
-    print(right.to_string())
-    print(left.to_string())
+    print([model.nb_factors for model in models])
     
-    new_left, new_right = cross.cross(left, right)
+    [model.set_manager(mgr) for model in models]
+    [model.update_sdd() for model in models]
+    print([model.sdd_size() for model in models])
     
-    print(fitness.of(new_left, data))
-    print(fitness.of(new_right, data))
+    sizes = list(map(lambda x : math.log(x.sdd_size()), models))
+    ll = list(map(lambda x : x.LL(data), models))
     
-    new_left.fit(data)
-    new_right.fit(data)
+    plt.plot(sizes, ll, 'bo')    
     
-    print(fitness.of(new_left, data))
-    print(fitness.of(new_right, data))
+    [model.fit(data) for model in models]
+    
+    ll2 = list(map(lambda x : x.LL(data), models))
+    
+    plt.plot(sizes, ll2, 'ro')
+    
+    empty = Model(n_vars)
+    empty.set_manager(mgr)
+    empty.update_sdd()
+    empty.dirty = True
+    
+    custom = Model(n_vars)
+    custom.set_manager(mgr)
+    
+    not_high_buying_cost = lit(-struct.variable_of(0, "high"))
+    not_high_maint_cost = lit(-struct.variable_of(1, "high"))
+    doors_5 = lit(struct.variable_of(2, "5more"))
+    
+    pers2 = lit(struct.variable_of(3, "2"))
+    pers4 = lit(struct.variable_of(3, "4"))
+    morepers = lit(struct.variable_of(3, "more"))
+    npers2 = lit(-struct.variable_of(3, "2"))
+    npers4 = lit(-struct.variable_of(3, "4"))
+    nmorepers = lit(-struct.variable_of(3, "more"))
+    
+    lug_buut = lit(struct.variable_of(4, "big"))
+    not_high_safety = lit(-struct.variable_of(5, "high"))
+    not_low_safety = lit(-struct.variable_of(5, "low"))
+    
+    very_good_car = lit(struct.variable_of(6, "vgood"))
+    good_car = lit(struct.variable_of(6, "good"))    
+    unacc = lit(struct.variable_of(6, "unacc"))
+    
+    good_or_vgood = disj([very_good_car, good_car]) 
+       
+    f1 = disj([good_or_vgood, not_high_safety] )
+    f2 = disj([not_low_safety, unacc])
+    f3 = disj([not_high_buying_cost, not_high_maint_cost, unacc])
+    f4 = disj([conj([pers2, npers4, nmorepers]),
+               conj([npers2, pers4, nmorepers]),
+               conj([npers2, npers4, morepers])])
+    f5 = disj([morepers, doors_5])
+    
+    custom.add_factor(f1)
+    custom.add_factor(f2)
+    custom.add_factor(f3)
+    custom.add_factor(f4)
+    custom.add_factor(f5)
+    
+    custom.update_sdd()
+    custom.dirty = True
+    
+    llbc = custom.LL(data)
+    custom.fit(data)
+    llac = custom.LL(data)
+    
+    llb = empty.LL(data)
+    empty.fit(data)    
+    lla = empty.LL(data)
+    
+    plt.plot([math.log(custom.sdd_size())], [llbc], "yo")
+    plt.plot([math.log(custom.sdd_size())], [llac], "go")
+    plt.plot([0], [llb], "yo")
+    plt.plot([0], [lla], "go")
+    
+    mxi = ll2.index(max(ll2))
+    
+    print(models[mxi].to_string())
+    print(custom.to_string())
+    
+    plt.show()
     
 def script2():
 
