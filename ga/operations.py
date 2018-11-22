@@ -34,14 +34,14 @@ class simple_subset_cross(cross_over):
         return new_left, new_right
         
 class mutation:
-    def mutate(self, model) -> Model:
+    def apply(self, model) -> Model:
         pass
         
 class add_mutation(mutation):
     def __init__(self):
         pass
         
-    def mutate(self, model):
+    def apply(self, model):
         
         # Domain size
         domain_size = model.domain_size
@@ -57,7 +57,7 @@ class remove_mutation(mutation):
     def __init__(self):
         pass
         
-    def mutate(self, model):
+    def apply(self, model):
         
         features = model.get_features()
         random_rem = select_random_element(features)
@@ -66,8 +66,55 @@ class remove_mutation(mutation):
         
         return model
         
-def select_random_element(elements):
-    return random.choice(elements)
+class multi_mutation(mutation):
+    def __init__(self, mutations, distr=None):
+        self.mutations = mutations
+        self.mutation_distribution = distr
+        
+    def apply(self, individual):
+        mutation = select_random_element(self.mutations, self.mutation_distribution)        
+        return mutation.apply(individual)
+        
+class selection:
+    def apply(self, pop, fitness, n):
+        # pop and fitness should be equal size, where each pair formed by (pop[i], fitness[i])
+        # should be the fitness of individual i
+        pass
+        
+# Implements basic weighted selection
+# Except there is a certain regularizer
+class Weighted_selection(selection):
+    def __init__(self, reg):
+        self.regularizer = reg
+       
+    def apply(self, pop, fitness, n):
+        pop_n = len(pop)
+        reg = self.regularizer * min(fitness)
+        probs = [fi/sum(fitness) for fi in fitness]
+        selected_ind = np.random.choice(range(pop_n), replace = False, p=probs, size = n)
+        non_selected_ind = [i for i in range(pop_n) if i not in selected_ind]
+        
+        s_pop =  take_indices(pop, selected_ind)
+        s_fit =  take_indices(fitness, selected_ind)
+        ns_pop = take_indices(pop, non_selected_ind)
+        ns_fit = take_indices(fitness, non_selected_ind)
+                
+        return (s_pop, s_fit), (ns_pop, ns_fit)
+        
+        
+class pairing:
+    def pair(pop, fit):
+        zipped = zip(pop, fit)
+        sorted_pop = sorted(zipped, lambda x : x[1], reverse=True)
+        
+        pairs = []
+        for i in range(0, len(sorted_pop), 2):
+            pairs.append((sorted_pop[i][0], sorted_pop[i+1][0]))
+            
+        return pairs
+         
+def select_random_element(elements, distr=None):
+    return np.random.choice(elements, p = distr)
     
 def empty_child(source):
     # TODO: transfer weights???
@@ -114,7 +161,8 @@ def sdd_from_subset(source, subset):
     conjunction = reduce( lambda x, y : x & y, enc_sdds, default_sdd)
     return conjunction
     
-    
+def take_indices(arr, ind):
+    return [e for i, e in enumerate(arr) if i in ind]
     
     
     

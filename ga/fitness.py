@@ -1,4 +1,5 @@
 from model.model import Model
+import math
 
 class FitnessFunction:
     def of(self, model, data):
@@ -14,4 +15,4 @@ class SimpleFitness(FitnessFunction):
         ll = model.LL(data)
         size = model.sdd_size() 
         print(ll, size)
-        return  ll* self.alpha - size* self.beta
+        return  ll* self.alpha - math.log(size)* self.beta

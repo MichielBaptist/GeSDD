@@ -99,6 +99,8 @@ class Model:
         self.dirty = True        
         self.wmc = None
         
+        return self
+        
     def objective_function(self, factor_weights):
         # 1) make sure you re-compute partition each time
         ln_Z = self.partition_with_factor_weights(factor_weights)

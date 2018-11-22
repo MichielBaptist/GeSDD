@@ -12,8 +12,10 @@ from datio import IO_manager
 from graphviz import Source
 from pysdd.sdd import SddManager
 
+import ga.operations as gao
 from ga.operations import *
 import ga.fitness
+import ga.alg as algorithm
 
 from logic.conj import conj
 from logic.disj import disj
@@ -27,6 +29,34 @@ from matplotlib import pyplot as plt
 from model.indicator_manager import indicator_manager
 
 def __main__():
+
+    np.random.seed(40)
+    data, struct, n_worlds, n_vars = IO_manager.read_from_names_folder("data/car")
+    global_max = 200
+    local_max = 200
+    bot = n_vars + 1
+    top = bot + global_max
+    mgr = SddManager(top)
+    imgr  = indicator_manager(range(bot, top))
+    gen = generator(n_vars, imgr, mgr, max_nb_factors = local_max)
+    
+    params = {}
+    params['selection'] = gao.Weighted_selection(1)
+    params['paring'] = gao.pairing()
+    params['cross'] = gao.simple_subset_cross()
+    params['mutation'] = gao.multi_mutation([gao.add_mutation(), gao.remove_mutation()])
+    params['fitness'] = ga.fitness.SimpleFitness(1, 0.5)
+    params['generator'] = gen
+    
+    pop_size = params['pop_size'] = 3
+    data = params['data'] = data
+    mpr = params['mutate_probability'] = 0.0
+    n_gen = params['n_gens'] = 20
+    n_select = params['n_select'] = 2
+    
+    algorithm.run(params)
+    
+def script3():
     np.random.seed(40)
     data, struct, n_worlds, n_vars = IO_manager.read_from_names_folder("data/car")
     global_max = 200
