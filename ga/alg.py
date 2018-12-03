@@ -1,9 +1,12 @@
 import numpy as np
 import random
 
+from matplotlib import pyplot as plt
+from itertools import chain
+
 def run(params):
     selection = params['selection']
-    paring = params['paring']
+    pairing = params['paring']
     cross = params['cross']
     mutation = params['mutation']
     fitness = params['fitness']
@@ -15,40 +18,48 @@ def run(params):
     n_gen = params['n_gens']
     n_select = params['n_select']
     
+    book = params['logbook']
+    
     population = generator.gen_n(pop_size)
     population = optimize_population(population, data)
     population_fitness = fitness_population(population, fitness, data)
     
-    #logbook = logbook()
+    lls = [model.LL(data) for model in population]
+    
+    book.post(0, "ll", lls)
+    book.post(0, "fit", population_fitness)
     
     for gen in range(1, n_gen + 1):
+    
+        print(f"iteration: {gen}")
         
         # 1) Selecting the best individuals
-        selected, not_selected = selection.apply(population, population_fitness, n_select)
+        selected, not_selected = selection.apply(population, population_fitness, n_select)        
         
-        
-        selected_individuals, selected_fitness = zip(*selected)
-        non_selected_individuals, non_selected_fitness = zip(*not_selected)
-        
-        print(selected_individuals)
-        print(non_selected_individuals)
-        quit()
+        selected_individuals, selected_fitness = selected
+        non_selected_individuals, non_selected_fitness = not_selected
         
         # 2) Pair individuals
         pairs_for_mating = pairing.pair(selected_individuals, selected_fitness)
         
         # 3) Produce offspring
         offspring_of_selected = cross_pairs(pairs_for_mating, cross)
-        
+                
         # 4) Join the population again
-        population = union_of_sets(offspring_of_selected, not_selected)
+        population = union_of_sets(offspring_of_selected, non_selected_individuals)
         
         # 5) Mutate the population
         population = mutate_population(population, mutation, mpr)
         
         # 6) Re-optimize the population and calculate fitness
         population = optimize_population(population, data)
-        population_fitness = fitness_population(population, fitness)
+        population_fitness = fitness_population(population, fitness, data)
+        
+        
+        lls = [model.LL(data) for model in population]
+        
+        book.post(gen, "ll", lls)
+        book.post(gen, "fit",population_fitness)
         
     return population, population_fitness
         
@@ -56,7 +67,8 @@ def union_of_sets(left, right):
     return left+right
     
 def cross_pairs(pairs, cross):
-    return [cross(left, right) for (left, right) in pairs]
+    children = [cross.apply(left, right) for (left, right) in pairs]
+    return list(chain(*children))
     
 def optimize_population(population, data):
     return [individual.fit(data) for individual in population]
@@ -78,15 +90,29 @@ def fitness_population(pop, fit, data):
     return [fit.of(ind, data) for ind in pop] 
     
 
-'''
+
 class logbook:
 
     def __init__(self):
-        self.book = []
+        # Per iteration an index
+        self.book = {}
 
-    def post(it, prop, items):
-        if 
-        self.add_column(self.book, prop, items)
-    def add_column(self, table, name, data)
+    def post(self, it, prop, items):
+        if it not in self.book:
+            self.book[it] = {}
+        self.book[it][prop] = items
         
-'''
+    def get_prop(self, name):
+        all_data = [data[name] for (i, data) in self.book.items()]
+        return all_data
+        
+    def get_iteration(self, it):
+        return self.book[it]
+        
+    def get_piont(self, it, name):
+        return self.book[it][name]
+       
+    
+    
+    
+        

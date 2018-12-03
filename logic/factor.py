@@ -9,7 +9,8 @@ class factor:
         pass
         
     def compile(self, manager):
-        self.sdd = self.to_sdd(manager)
+        if self.get_sdd() == None:            
+            self.sdd = self.to_sdd(manager)
         return self.get_sdd()
     
     def get_sdd(self):

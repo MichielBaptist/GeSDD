@@ -7,12 +7,53 @@ import time
 from functools import reduce
 from logic.cons import cons
 
+import math
+
 class cross_over:
-    def cross(self, model1, model2) -> Model:
+    def apply(self, model1, model2) -> Model:
         pass
 
+class rule_swapping_cross(cross_over):
+    def __init__(self, rules_transferred = 1):
+        self.rules_transferred = rules_transferred
+        
+    def apply(self, left, right):
+        # No need to make new sdd's for this cross over!
+        
+        # Get rules
+        left_rules = left.get_features()
+        right_rules = right.get_features()
+        # Remove the common rules (no use transferring these)
+        left_rules, right_rules = list_difference(left_rules, right_rules)
+        
+        # None untill found
+        left_transfer_rule = None
+        right_transfer_rule = None
+        
+        # Only if there are enough rules to transfer
+        if len(left_rules) >= self.rules_transferred:
+            # pick a rules based on softmax
+            weights = [w for (_,w,_,_) in left_rules]
+            probs = softmax(weights)
+            left_transfer_rule = select_random_element(left_rules, probs)
+            
+        # Only if there are enough rules to transfer
+        if len(right_rules) >= self.rules_transferred:
+            # pick a rules based on softmax
+            weights = [w for (_,w,_,_) in right_rules]
+            probs = softmax(weights)
+            right_transfer_rule = select_random_element(right_rules, probs)
+            
+        if left_transfer_rule != None:
+            right.add_compiled_factor(left_transfer_rule)
+            
+        if right_transfer_rule != None:
+            left.add_compiled_factor(right_transfer_rule)
+        
+        return left, right
+        
 class simple_subset_cross(cross_over):
-    def cross(self, left, right):
+    def apply(self, left, right):
         
         # Create an empty child
         new_left = empty_child(left)
@@ -30,6 +71,10 @@ class simple_subset_cross(cross_over):
         new_left = add_and_join(left, right, left_A, right_A, new_left)
         new_right = add_and_join(left, right, left_B, right_B, new_right)
         
+        # Remove the previous models
+        left.free()
+        right.free()
+        
         # Return the new models
         return new_left, new_right
         
@@ -46,7 +91,7 @@ class add_mutation(mutation):
         # Domain size
         domain_size = model.domain_size
         
-        gen = generator(domain_size)
+        gen = generator(domain_size, None, None)
         (random_f, random_w) = gen.random_feature()
         
         model.add_factor(random_f, random_w)
@@ -58,6 +103,9 @@ class remove_mutation(mutation):
         pass
         
     def apply(self, model):
+    
+        if model.nb_factors == 0:
+            return model
         
         features = model.get_features()
         random_rem = select_random_element(features)
@@ -66,12 +114,58 @@ class remove_mutation(mutation):
         
         return model
         
+class weighted_remove_mutation(mutation):
+    def __init__(self):
+        self.max_exponent = 500
+        pass
+        
+    def apply(self, model):
+    
+        if model.nb_factors == 0:
+            return model
+            
+        features = model.get_features()
+        importance = [math.exp(min(1/abs(w), self.max_exponent)) for (_,w,_,_) in features]
+        probabilities = [i/sum(importance) for i in importance]
+                
+        random_rem = select_random_element(features, probabilities)
+        
+        model.remove_factor(random_rem)
+        
+        return model
+        
+class threshold_mutation(mutation):
+    def __init__(self, threshold):
+        self.threshold = threshold
+        
+    def apply(self, individual):
+        features = individual.get_features()
+        bad_features = [(f, w, i, e) for (f, w, i, e) in features if abs(w) <= self.threshold]
+        
+        #print(individual.to_string())
+        #print(bad_features)
+        
+        for feature in bad_features:
+            individual.remove_factor(feature)
+            
+        return individual
+        
+class script_mutation(mutation):
+    def __init__(self, mutations):
+        self.mutations = mutations
+        
+    def apply(self, individual):
+        for mutation in self.mutations:
+            individual = mutation.apply(individual)
+        return individual
+        
 class multi_mutation(mutation):
     def __init__(self, mutations, distr=None):
         self.mutations = mutations
         self.mutation_distribution = distr
         
     def apply(self, individual):
+        #print(self.mutations)
         mutation = select_random_element(self.mutations, self.mutation_distribution)        
         return mutation.apply(individual)
         
@@ -103,25 +197,47 @@ class Weighted_selection(selection):
         
         
 class pairing:
-    def pair(pop, fit):
+    def pair(self, pop, fit):
         zipped = zip(pop, fit)
-        sorted_pop = sorted(zipped, lambda x : x[1], reverse=True)
+        sorted_pop = sorted(zipped, key = lambda x : x[1], reverse=True)
         
         pairs = []
         for i in range(0, len(sorted_pop), 2):
             pairs.append((sorted_pop[i][0], sorted_pop[i+1][0]))
             
         return pairs
+     
          
+def list_difference(l1, l2):
+    # Removes the common elements from list 1 and list 2
+    l1_filtered = list(l1)
+    l2_filtered = list(l2)
+    for i in l1:
+        for j in l2:
+            if position_equal(i, j, [0,2,3]): #TODO: Ew ew ew, rework
+                #print("equality")
+                l1_filtered.remove(i)
+                l2_filtered.remove(j)
+                
+    return l1_filtered, l2_filtered
+
+def position_equal(l1, l2, pos):
+    # Checks if the array is equal at the positions indexed by pos 
+    return [l1[i] for i in pos] == [l2[i] for i in pos]
+    
 def select_random_element(elements, distr=None):
-    return np.random.choice(elements, p = distr)
+    index = np.random.choice(len(elements), p = distr)
+    return elements[index]
     
 def empty_child(source):
     # TODO: transfer weights???
     domain_size = source.domain_size
     imgr = source.indicator_manager
     mgr = source.mgr
-    return Model(domain_size, imgr, mgr)
+    
+    empty = Model(domain_size, imgr, mgr)
+    empty.dynamic_update = True
+    return empty
     
 def split_collection(collection, distr):
     
@@ -135,7 +251,7 @@ def split_collection(collection, distr):
     for (c, f) in zip(choices, collection):
         sets[c].append(f)
         
-    print([len(s) for s in sets])
+    #print([len(s) for s in sets])
     return sets
     
     
@@ -164,9 +280,10 @@ def sdd_from_subset(source, subset):
 def take_indices(arr, ind):
     return [e for i, e in enumerate(arr) if i in ind]
     
-    
-    
-    
+def softmax(w):
+    exp = [math.exp(i) for i in w]
+    z = sum(exp)
+    return [i/z for i in exp]
     
     
     

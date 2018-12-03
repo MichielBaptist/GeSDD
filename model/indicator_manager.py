@@ -17,7 +17,7 @@ class indicator_manager:
             
     def add_region(self, availability, region):
         for indicator in region:
-            availability[indicator] = True
+            availability[indicator] = 0
             
         return availability
     
@@ -48,17 +48,20 @@ class indicator_manager:
     def has_next(self):
         return len(self.get_available_pool(self.availability)) > 0
         
+    def increment_variable(self, indicator):
+        self.availability[indicator] += 1
+        
     def claim_variable(self, indicator):
-        self.availability[indicator] = False
+        self.availability[indicator] += 1
         
     def free_variable(self, indicator):
-        self.availability[indicator] = True
+        self.availability[indicator] -= 1
         
     def get_available_pool(self, availability):
-        return [ind for (ind, available) in availability.items() if available]
+        return [ind for (ind, available) in availability.items() if available == 0]
         
     def get_unavailable_pool(self, availability):
-        return [ind for (ind, available) in availability.items() if not available]
+        return [ind for (ind, available) in availability.items() if available > 0]
 
     def __str__(self):
         return str(self.availability)

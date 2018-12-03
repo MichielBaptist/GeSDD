@@ -28,8 +28,7 @@ class Model:
     """
     
     # --------------------- init stuff --------------------
-    def __init__(self, domain_size, indicator_manager = None, manager = None, dynamic_update=False, max_nb_factors=10,
-                    pool_range = None):
+    def __init__(self, domain_size, indicator_manager = None, manager = None, dynamic_update=False, max_nb_factors=10, pool_range = None):
         # Method must get a manager! 
         self.factors = []              # List of (formula, weight, encoding, indicator) pairs. endocing contains SDD
         self.factor_stack = []         # List of (formula, weight) pairs to be added to the SDD
@@ -72,9 +71,20 @@ class Model:
         self.nb_factors = len(factors)
         self.sdd = sdd
         
+    def free(self):
+        self.factors = None
+        self.factor_stack = None
+        self.max_nb_factors = None
+        self.indicator_manager = None
+        self.mgr = None
+        self.sdd = None
+        self.Z = None
+        self.probs = None
+        
+        
     # ------------------ Training ----------------
     
-    def fit(self, worlds):
+    def fit(self, worlds, acc = 5e-2, max_fun=5):
         # worlds: [[{1,0}]]
         
         # 1) Count the worlds for each factor in the SDD:
@@ -91,7 +101,11 @@ class Model:
         
         # 4) Optimize
         res = minimize(objective, x0 = self.get_factor_weights(), jac = None, method="BFGS",
-                      options={'gtol': 1e-2, 'disp': True})
+                      options={
+                            #'gtol': acc,
+                            'disp': False, 
+                            'maxiter': max_fun
+                            })
         
         # 5) Set the weights correct!
         self.set_factor_weights(res.x)
@@ -166,6 +180,15 @@ class Model:
         
         if self.dynamic_update:                     # Only when dynamically updating we should change the SDD
             self.update_sdd()
+        
+    def add_compiled_factor(self, factor): 
+        self.indicator_manager.increment_variable(factor[3]) # Make sure to increment usage
+        self.factor_stack.append(factor)
+        
+        if self.dynamic_update:
+            self.update_sdd()
+            
+        self.nb_factors += 1
         
     def add_factor(self, factor, weight=0):
         if not self.can_add_factors():
@@ -261,7 +284,7 @@ class Model:
             times["2"] += t4-t3
             times["3"] += t5-t4
             
-        print(times)
+        #print(times)
         
         self.factor_stack = []
         
@@ -358,6 +381,9 @@ class Model:
     def get_w(self):
         return [w for (_, w, _, _) in self.factors]
         
+    def get_f(self):
+        return [f for (f,_,_,_) in self.factors]
+        
     def get_features(self):
         return list(filter(lambda e : not self.feat_is_literal(e), self.factors))
 
@@ -374,6 +400,19 @@ class Model:
         return self.sdd.count()
     # ------------------- Evaluation -------------------------
     
+    def world_probability(self, world):
+        ln_Z = self.partition()
+        
+        # Way 1
+        w_sum = 0
+        for (f, w, i) in self.get_fwi():
+            if f.evaluate(world):
+                w_sum += w
+            
+        print(math.exp(w_sum - ln_Z))
+        
+        return math.exp(w_sum - ln_Z)
+        
     def evaluate(self, world):
         for (factor, _, _, _) in self.factors:
             if factor.evaluate(world) == False:

@@ -7,6 +7,8 @@ import gen.gen as g
 import pysdd
 import numpy as np
 
+import data_gen
+
 from datio import IO_manager
 
 from graphviz import Source
@@ -16,6 +18,7 @@ import ga.operations as gao
 from ga.operations import *
 import ga.fitness
 import ga.alg as algorithm
+from ga.alg import logbook
 
 from logic.conj import conj
 from logic.disj import disj
@@ -28,11 +31,179 @@ from matplotlib import pyplot as plt
 
 from model.indicator_manager import indicator_manager
 
+from sklearn.model_selection import train_test_split
+
+def data_gen_script():
+    
+    n_vars = 10
+    global_max = 30
+    local_max = 30
+    bot = n_vars + 1
+    top = bot + global_max
+    
+    mgr = SddManager(top)
+    imgr  = indicator_manager(range(bot, top))
+    
+    
+    model = Model(n_vars, imgr, mgr)
+    model.dynamic_update = True
+    model.update_sdd()
+    
+    model = custom_model(model)
+    
+    # Gen data from model
+    dsizes = [int(math.pow(10,i)) for i in range(4,5)]
+    sets = [data_gen.gen(model, size) for size in dsizes]
+    
+    '''
+    # Define sdds
+    sdds = [model]
+    
+    # Define accurcaies    
+    accuracies = [math.pow(10,-i/100) for i in range(0, 400, 5)]
+    print(accuracies)
+    
+    for dset in sets:
+        train, test = train_test_split(dset, test_size = 0.1)
+        avll_train = []
+        avll_test = []
+        time_ = []
+        for acc in accuracies:        
+            [model.set_factor_weights([0 for i in range(len(model.factors))]) for model in sdds]
+            
+            start = time.time()
+            [model.fit(train, acc) for model in sdds] # Fit all models with accuracy
+            
+            end = time.time()
+            
+            lls_train = [model.LL(train) for model in sdds]
+            lls_test = [model.LL(test) for model in sdds]
+            
+            avg = np.mean(lls_train)
+            avg_test = np.mean(lls_test)
+            
+            avll_train.append(avg)
+            avll_test.append(avg_test)
+            time_.append(end-start)
+            
+        
+        plt.semilogx(accuracies, avll_train)
+        plt.semilogx(accuracies, avll_test)
+        plt.semilogx(accuracies, time_)
+        
+    print(model.to_string())
+    plt.show()
+    
+    '''
+    
+def custom_model2(model):
+    f1 = disj([lit(-5), lit(-1), lit(2) ])
+    f2 = disj([lit(-5), lit(-2), lit(1) ])
+    f3 = disj([lit(-1),lit(3)])
+    f4 = disj([lit(-2),lit(4)])
+    f5 = disj([lit(-1),lit(-2), lit(5)])
+    #f6 = disj([])
+    
+    model.add_factor(f1, 2)
+    model.add_factor(f2, 2)    
+    model.add_factor(f3, 3)
+    model.add_factor(f4, 3)
+    model.add_factor(f5, 1)
+    return model
+    
+def custom_model(model):
+    # Custom model here
+    
+    f1 = conj([lit(1), lit(2), lit(-3)])
+    f2 = disj([lit(-4), lit(6)])
+    f3 = disj([lit(5), lit(-7), lit(8), lit(-9)])
+    f4 = conj([lit(-4), lit(10)])
+    f5 = equiv([lit(9), lit(6)])
+    
+    model.add_factor(f1, 2)
+    model.add_factor(f2, 3)
+    model.add_factor(f3, 1.5)
+    model.add_factor(f4, 0.9)
+    model.add_factor(f5, 2)
+    
+    return model
+    
+def script4():
+    np.random.seed()
+    
+    data, struct, n_worlds, n_vars = IO_manager.read_from_names_folder("data/car")
+    train, test = train_test_split(data, test_size = 0.1)
+    global_max = n_vars + 400
+    local_max = 20
+    bot = n_vars + 1
+    top = bot + global_max
+    mgr = SddManager(top)
+    imgr  = indicator_manager(range(bot, top))
+    gen = generator(n_vars, imgr, mgr, max_nb_factors = local_max)
+    
+    sdds = gen.gen_n(1)
+        
+    avll_train = []
+    avll_test = []
+    time_ = []
+    
+    # Define accurcaies
+    
+    
+    #accuracies = [math.exp(-i/10) for i in range(0, 70, 1)]
+    accuracies = [i for i in range(100)]
+    print(accuracies)
+    print(len(train))
+    print(len(test))
+    
+    # -----------------
+    
+    
+    for acc in accuracies:
+        start = time.time()
+        [model.fit(train, 0, acc) for model in sdds] # Fit all models with accuracy
+        
+        end = time.time()
+        
+        lls_train = [model.LL(train) for model in sdds]
+        lls_test = [model.LL(test) for model in sdds]
+        
+        avg = np.mean(lls_train)
+        avg_test = np.mean(lls_test)
+        
+        avll_train.append(avg)
+        avll_test.append(avg_test)
+        time_.append(end-start)
+        
+        print(acc)
+        
+        [model.set_factor_weights([0 for i in range(len(model.factors))]) for model in sdds]
+        
+    plt.plot(accuracies, avll_train)
+    plt.plot(accuracies, avll_test)
+    plt.plot(accuracies, time_)
+    plt.show()
+         
+def frange(start, end, step):
+    if start < end:
+        i = start
+        while i < end:
+            yield i
+            i+= step
+            
+    else:
+        i = start
+        while end < i:
+            yield i
+            i -= step
+    
 def __main__():
 
-    np.random.seed(40)
-    data, struct, n_worlds, n_vars = IO_manager.read_from_names_folder("data/car")
-    global_max = 200
+    np.random.seed(555)
+    #data, struct, n_worlds, n_vars = IO_manager.read_from_names_folder("data/car")
+    n_worlds = 1000
+    n_vars = 5
+    global_max = 400
     local_max = 200
     bot = n_vars + 1
     top = bot + global_max
@@ -40,21 +211,76 @@ def __main__():
     imgr  = indicator_manager(range(bot, top))
     gen = generator(n_vars, imgr, mgr, max_nb_factors = local_max)
     
+    # --- Generate the data ---------------
+    # 1) custom SDD
+    custom = Model(n_vars, imgr, mgr)
+    custom.dynamic_update = True
+    goal = custom_model2(custom)
+    
+    # 2) sample the SDD
+    data = data_gen.gen(custom, n_worlds)
+    
+    custom.partition()
+    
+    print(custom.to_string())
+    print(custom.count(custom.get_f(), data))
+    #quit()
+    
+    # --- Get the base LL (empty model) ---
+    empty = Model(n_vars, imgr, mgr)
+    empty.update_sdd()
+    empty.fit(data)
+    base = empty.LL(data)
+    print(base)
+    # -------------------------------------
+    
     params = {}
     params['selection'] = gao.Weighted_selection(1)
     params['paring'] = gao.pairing()
-    params['cross'] = gao.simple_subset_cross()
-    params['mutation'] = gao.multi_mutation([gao.add_mutation(), gao.remove_mutation()])
-    params['fitness'] = ga.fitness.SimpleFitness(1, 0.5)
+    params['cross'] = gao.rule_swapping_cross()
+    params['mutation'] = gao.script_mutation([
+                                             gao.threshold_mutation(0.1),
+                                             gao.multi_mutation([
+                                                    gao.add_mutation(),
+                                                    gao.weighted_remove_mutation()
+                                                ]),
+                                             ])
+                                             
+    params['fitness'] = ga.fitness.fitness2(0.5, base)
     params['generator'] = gen
+    params['logbook'] = logbook()
     
-    pop_size = params['pop_size'] = 3
+    pop_size = params['pop_size'] = 20
     data = params['data'] = data
-    mpr = params['mutate_probability'] = 0.0
-    n_gen = params['n_gens'] = 20
-    n_select = params['n_select'] = 2
+    mpr = params['mutate_probability'] = 0.8
+    n_gen = params['n_gens'] = 100
+    n_select = params['n_select'] = 10
     
-    algorithm.run(params)
+    pop, fits = algorithm.run(params)
+    
+    log = params['logbook']
+    
+    max_fit = [max(it) for it in log.get_prop("fit")]
+    max_ll = [max(it) for it in log.get_prop("ll")]
+    avg_fit = log.get_prop("fit")
+    avg_fit = [np.mean(it) for it in avg_fit]
+    
+    avg_ll = log.get_prop("ll")
+    avg_ll = [np.mean(it) for it in avg_ll]
+    
+    goal_ll = custom.LL(data)
+    goal_fit = params['fitness'].of(custom, data)
+    
+    plt.plot(range(1, len(avg_ll) + 1), avg_ll)    
+    plt.plot(range(1, len(avg_fit) + 1), avg_fit) 
+    plt.plot(range(1, len(max_fit) + 1), max_fit) 
+    plt.plot(range(1, len(max_ll) + 1), max_ll)
+    plt.plot(range(1, len(max_ll) + 1), [goal_ll for i in range(len(max_ll))])
+    plt.plot(range(1, len(max_ll) + 1), [goal_fit for i in range(len(max_ll))])
+    plt.show()
+    
+    print(avg_fit)
+    print(max_ll)
     
 def script3():
     np.random.seed(40)
