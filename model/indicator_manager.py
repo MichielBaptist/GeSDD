@@ -1,17 +1,19 @@
 import random
+import utils.string_utils as stru
 
 class indicator_manager:
 
     def __init__(self, regions):
         # Regions: A collection of range(low, high) objects
         self.availability = {}
-        self.init_regions(self.availability, regions)
+        self.regions = regions
+        
+        if isinstance(self.regions, range):
+            self.regions = [regions]
+        
+        self.init_regions(self.availability, self.regions)
         
     def init_regions(self, availability, regions):
-    
-        if isinstance(regions, range):
-            regions = [regions]
-            
         for region in regions:
             availability = self.add_region(availability, region)
             
@@ -64,4 +66,19 @@ class indicator_manager:
         return [ind for (ind, available) in availability.items() if available > 0]
 
     def __str__(self):
-        return str(self.availability)
+        lines = [
+            "Standard indicator manager"
+        ]
+        
+        reg_str = [("Region Nb.", "Region", "size")]
+        reg_str += [(i + 1, f"[{min(r)}, {max(r)}]", f"{max(r)-min(r)}") for i, r in enumerate(self.regions)]
+        reg_str = stru.pretty_print_table(reg_str)
+        
+        lines += [reg_str]
+        
+        return "\n".join(lines)
+        
+        
+        
+        
+        

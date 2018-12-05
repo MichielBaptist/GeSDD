@@ -1,5 +1,6 @@
 import numpy as np
 import random
+import utils.string_utils as stru
 
 from matplotlib import pyplot as plt
 from itertools import chain
@@ -109,8 +110,31 @@ class logbook:
     def get_iteration(self, it):
         return self.book[it]
         
-    def get_piont(self, it, name):
+    def get_point(self, it, name):
         return self.book[it][name]
+        
+    def unique_properties(self):        
+        unique_properties = [v for (k,v) in self.book.items()]
+        unique_properties = [list(d.keys()) for d in unique_properties]
+        unique_properties = set([i for l in unique_properties for i in l])
+        return unique_properties
+        
+    def __str__(self):
+        n_iter = len(self.book.items())
+        unique_props = self.unique_properties()
+        
+        props = [("Prop. Nb.", "Prop.")]
+        props += [(i+1, p) for i, p in enumerate(unique_props)]
+        props = stru.pretty_print_table(props)
+        props = stru.pretty_print_table([("Properties:", props)])
+        lines = [
+            "Standard logbook",
+            f"--> Nb. iterations: {n_iter}",
+            props
+        ]
+        
+        return "\n".join(lines)
+        
        
     
     

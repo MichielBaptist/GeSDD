@@ -6,6 +6,9 @@ import math
 import gen.gen as g
 import pysdd
 import numpy as np
+import sys
+
+from Saver import saver
 
 import data_gen
 
@@ -198,8 +201,16 @@ def frange(start, end, step):
             i -= step
     
 def __main__():
+    # Generate a random seed
+    seed = random.randrange(2^32 - 1)
+    print(seed)
+    rng = random.Random(seed)
+    print("Seed was:", seed)
 
-    np.random.seed(555)
+    # Set the seed for reproducing results
+    np.random.seed(seed)
+    random.seed(seed)
+    
     #data, struct, n_worlds, n_vars = IO_manager.read_from_names_folder("data/car")
     n_worlds = 1000
     n_vars = 5
@@ -235,6 +246,7 @@ def __main__():
     # -------------------------------------
     
     params = {}
+    params['seed'] = seed
     params['selection'] = gao.Weighted_selection(1)
     params['paring'] = gao.pairing()
     params['cross'] = gao.rule_swapping_cross()
@@ -248,15 +260,17 @@ def __main__():
                                              
     params['fitness'] = ga.fitness.fitness2(0.5, base)
     params['generator'] = gen
-    params['logbook'] = logbook()
-    
-    pop_size = params['pop_size'] = 20
-    data = params['data'] = data
-    mpr = params['mutate_probability'] = 0.8
-    n_gen = params['n_gens'] = 100
-    n_select = params['n_select'] = 10
+    params['logbook'] = logbook()    
+    params['pop_size'] = 20
+    params['data'] = data
+    params['mutate_probability'] = 0.8
+    params['n_gens'] = 50
+    params['n_select'] = 10
     
     pop, fits = algorithm.run(params)
+    
+    svr = saver("run")
+    svr.save_run(params, logbook)
     
     log = params['logbook']
     

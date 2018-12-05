@@ -28,3 +28,13 @@ class fitness2(FitnessFunction):
        
         
         return max((ll - self.base) / (math.log(self.alpha * size + 1) + 1), 1e-2) # No negative fitness
+        
+    def __str__(self):
+        lines = [
+            "Fitness 2",
+            "LL gain per log(n)",
+            "--> F(i) = ll - base / (log(alpha*n + 1) + 1)   If F(i) >= 0",
+            "         = 0                                    Else ",
+            f"--> alpha: {self.alpha}"
+        ]
+        return "\n".join(lines)

@@ -22,6 +22,8 @@ from logic.cons import cons
 from logic.factor import factor
 from logic.equiv import equiv
 
+import utils.string_utils as stru
+
 class generator:
     
     def __init__(self, domain_size, indicator_manager, manager = None, fn_sparseness = 0.25, operation_distr = [20,4,1], min_feature_size = 2, feature_size_factor=1.5, subgroup_size_factor = 1.0, remove_after_select_p = 0.95, negation_prob = 0.5, max_nb_factors = 10):
@@ -150,6 +152,21 @@ class generator:
     
     def coin_flip(self, p):
         return np.random.uniform() < p
+    
+    
+    def __str__(self):
+        lines = [
+            "Recusive generator"
+        ]
+        
+        attrs = [("Attribute", "Value")]
+        attrs += [(k, v) for (k,v) in vars(self).items() if k != "manager"]
+        attrs = stru.pretty_print_table(attrs)
+        
+        lines += [stru.pretty_print_table([("-->", attrs)])]
+        
+        return "\n".join(lines)
+        
         
 
 def random_data(var, worlds):

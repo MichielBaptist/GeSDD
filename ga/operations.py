@@ -9,6 +9,8 @@ from logic.cons import cons
 
 import math
 
+import utils.string_utils as stru
+
 class cross_over:
     def apply(self, model1, model2) -> Model:
         pass
@@ -52,6 +54,15 @@ class rule_swapping_cross(cross_over):
         
         return left, right
         
+    def __str__(self):
+        lines = [
+            "Rule swapping",
+            f"--> Nb. Rules swapped: {self.rules_transferred}",
+            f"--> Weighting: Softmax"
+        ]
+        return "\n".join(lines)
+                
+        
 class simple_subset_cross(cross_over):
     def apply(self, left, right):
         
@@ -78,6 +89,12 @@ class simple_subset_cross(cross_over):
         # Return the new models
         return new_left, new_right
         
+    def __str__(self):
+        lines = [
+            "Siple Subset cross"
+        ]
+        return "\n".join(lines)
+        
 class mutation:
     def apply(self, model) -> Model:
         pass
@@ -98,6 +115,13 @@ class add_mutation(mutation):
         
         return model
         
+    def __str__(self):
+        lines = [
+            "Add mutation",
+            f"--> Rule generaion: generator(domain_size).random_feature()"
+        ]
+        return "\n".join(lines)
+        
 class remove_mutation(mutation):
     def __init__(self):
         pass
@@ -113,6 +137,13 @@ class remove_mutation(mutation):
         model.remove_factor(random_rem)
         
         return model
+        
+    def __str__(self):
+        lines = [
+            "Remove mutation",
+            f"--> Rule removel: uniform"
+        ]
+        return "\n".join(lines)
         
 class weighted_remove_mutation(mutation):
     def __init__(self):
@@ -133,6 +164,13 @@ class weighted_remove_mutation(mutation):
         model.remove_factor(random_rem)
         
         return model
+    
+    def __str__(self):
+        lines = [
+            "Remove mutation",
+            f"--> Rule removel: softmax"
+        ]
+        return "\n".join(lines)
         
 class threshold_mutation(mutation):
     def __init__(self, threshold):
@@ -150,6 +188,13 @@ class threshold_mutation(mutation):
             
         return individual
         
+    def __str__(self):
+        lines = [
+            "Threshold mutation",
+            f"--> Threshold: {self.threshold}"
+        ]
+        return "\n".join(lines)
+        
 class script_mutation(mutation):
     def __init__(self, mutations):
         self.mutations = mutations
@@ -159,15 +204,37 @@ class script_mutation(mutation):
             individual = mutation.apply(individual)
         return individual
         
+    def __str__(self):
+        lines = [
+            "Script mutation"
+        ]
+        mut_str = [(str(i+1) + ")",str(mut)) for i, mut in enumerate(self.mutations)]
+        mut_str = stru.pretty_print_table(mut_str)
+        lines += [mut_str]
+        return "\n".join(lines)
+        
 class multi_mutation(mutation):
     def __init__(self, mutations, distr=None):
         self.mutations = mutations
         self.mutation_distribution = distr
         
+        if self.mutation_distribution == None:
+            self.mutation_distribution = [1/len(self.mutations) for i in range(len(self.mutations))]
+        
     def apply(self, individual):
         #print(self.mutations)
         mutation = select_random_element(self.mutations, self.mutation_distribution)        
         return mutation.apply(individual)
+        
+    def __str__(self):
+        lines = [
+            "Multi mutation"
+        ]
+        mut_str = [("Option", "Probability", "Mutation")]
+        mut_str += [(i+1, self.mutation_distribution[i], str(mut)) for i, mut in enumerate(self.mutations)]
+        mut_str = stru.pretty_print_table(mut_str)
+        lines += [mut_str]
+        return "\n".join(lines)
         
 class selection:
     def apply(self, pop, fitness, n):
@@ -183,7 +250,6 @@ class Weighted_selection(selection):
        
     def apply(self, pop, fitness, n):
         pop_n = len(pop)
-        reg = self.regularizer * min(fitness)
         probs = [fi/sum(fitness) for fi in fitness]
         selected_ind = np.random.choice(range(pop_n), replace = False, p=probs, size = n)
         non_selected_ind = [i for i in range(pop_n) if i not in selected_ind]
@@ -196,6 +262,13 @@ class Weighted_selection(selection):
         return (s_pop, s_fit), (ns_pop, ns_fit)
         
         
+    def __str__(self):
+        lines = [
+            "Weighted selection without regularizer",
+            "--> P(i) = wi / Z"
+        ]
+        return "\n".join(lines)
+        
 class pairing:
     def pair(self, pop, fit):
         zipped = zip(pop, fit)
@@ -206,6 +279,9 @@ class pairing:
             pairs.append((sorted_pop[i][0], sorted_pop[i+1][0]))
             
         return pairs
+        
+    def __str__(self):
+        return "Standard ordered pairing"
      
          
 def list_difference(l1, l2):
