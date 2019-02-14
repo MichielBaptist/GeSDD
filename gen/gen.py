@@ -53,7 +53,8 @@ class generator:
         modl.set_manager(self.manager)
         
         # 1) Select the number of features 
-        n_factors = self.random_feature_n()
+        #n_factors = self.random_feature_n()
+        n_factors = 1
         
         # 2) Create random features
         r_features = [self.random_feature() for i in range(n_factors)]
