@@ -5,6 +5,7 @@ import numpy as np
 class lit(factor):
     def __init__(self, literal_int):
         self.literal_int = literal_int
+        self.sdd = None
         super().__init__()
 
     def to_string(self):
@@ -22,6 +23,10 @@ class lit(factor):
     def evaluate(self, world):
         index = abs(self.literal_int) - 1 # Index in world
         sign = np.sign(self.literal_int)     # Sign of this literal
+
+        #print(index)
+        #print(world)
+        #print(sign)
 
         if world[index] == True and sign > 0:
             return True

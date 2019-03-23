@@ -31,14 +31,24 @@ class Model:
     """
 
     # --------------------- init stuff --------------------
-    def __init__(self, domain_size, indicator_manager = None, manager = None, dynamic_update=False, max_nb_factors=10, pool_range = None):
+    def __init__(self,
+                domain_size,
+                indicator_manager = None,
+                manager = None,
+                count_manager = None,
+                dynamic_update=False,
+                max_nb_factors=10,
+                pool_range = None,
+                unique_ID = None):
         # Method must get a manager!
         self.factors = []              # List of (formula, weight, encoding, indicator) pairs. endocing contains SDD
         self.factor_stack = []         # List of (formula, weight) pairs to be added to the SDD
         self.domain_size = domain_size # How many literals can this theory have?
         self.nb_factors = 0
         self.max_nb_factors = max_nb_factors
+        self.unique_ID = unique_ID
 
+        self.count_manager = count_manager
         self.indicator_manager = indicator_manager
         self.mgr = manager
         self.sdd = None                # Compiled SDD of the encoding (not of conj of factors)
@@ -53,7 +63,48 @@ class Model:
         self.probs = None
 
         if self.indicator_manager == None:
-            self. indicator_manager = self.init_indicator_manager(self.domain_size, self.max_nb_factors)
+            self.indicator_manager = self.init_indicator_manager(self.domain_size, self.max_nb_factors)
+
+    def free(self):
+        self.sdd = None
+        self.mgr = None
+        self.cmgr = None
+        self.nb_factors = None
+        self.dynamic_update = None
+        self.dirty = None
+        self.Z = None
+        self.probs = None
+
+        for (_,_,_,i) in self.factor_stack:
+            self.indicator_manager.free_variable(i)
+
+        for (_,_,_,i) in self.get_features():
+            self.indicator_manager.free_variable(i)
+
+        self.indicator_manager = None
+        self.factor_stack = None
+        self.factors = None
+        self.domain_size = None
+
+    def ref(self):
+        self.sdd.ref()
+        self.dirty = True
+
+    def deref(self):
+        self.sdd.deref()
+        self.dirty = True
+
+    def ref_recursive(self):
+        self.ref()
+
+        for feature in self.get_encodings():
+            feature.ref_recursive()
+
+    def deref_recursive(self):
+        self.deref()
+
+        for feature in self.get_encodings():
+            feature.deref_recursive()
 
     def add_initial_literals(self):
         for i in range(self.domain_size):
@@ -74,16 +125,48 @@ class Model:
         self.nb_factors = len(factors)
         self.sdd = sdd
 
-    def free(self):
-        self.factors = None
-        self.factor_stack = None
-        self.max_nb_factors = None
-        self.indicator_manager = None
-        self.mgr = None
-        self.sdd = None
-        self.Z = None
-        self.probs = None
+    """
+    Note: We can just copy the SDD since the SDD is an immutable
+    structure. Applying
+        - conjunctions
+        - disjunctions
+        - conditioning
+        - ...
+    Returns a new SDD, it does not alter the current SDD.
 
+    Also all logical rules are considered immutable. And thus Only
+    the list has to be coppied, the elements may be references.
+    """
+    def clone(self):
+
+        clone = self.soft_clone()
+
+        for (_,_,_,i) in clone.get_features():
+            clone.indicator_manager.increment_variable(i)
+
+        return clone
+
+    def soft_clone(self):
+
+        clone = Model(self.domain_size)
+
+        clone.indicator_manager = self.indicator_manager
+        clone.count_manager = self.count_manager
+        clone.mgr = self.mgr
+        clone.sdd = self.sdd
+        clone.factors = list(self.factors)
+        clone.nb_factors = self.nb_factors
+        clone.max_nb_factors = self.max_nb_factors
+        clone.dynamic_update = self.dynamic_update
+        clone.dirty = self.dirty
+        clone.Z = self.Z
+        clone.probs = self.probs
+        clone.unique_ID = self.unique_ID
+
+        return clone
+
+    def set_unique_ID(self, unique_ID):
+        self.unique_ID = unique_ID
 
     # ------------------ Training ----------------
 
@@ -127,7 +210,7 @@ class Model:
         self.dirty = True
         self.wmc = None
 
-        print(t.sum())
+        #print(t.sum())
 
         return self
 
@@ -184,21 +267,48 @@ class Model:
         return wmc.propagate()
 
     def count(self, factors, worlds):
-        return [f.count(worlds)/len(worlds) for f in factors]
+        if (self.count_manager == None):
+            print("Count manager not present! Highly recommended to set one!")
+            return [sum([f.evaluate(world) for world in worlds])/len(worlds) for f in factors]
+
+        return self.count_manager.count_factors(factors, worlds)
+
 
     # ------------------Add/Remove----------------
 
+    """
+    This method adds a literal factor. A literal factor is
+    a logical rule consisting of only a literal. The indicator
+    of a literal factor is also the literal i.e. l <=> l
+    The weight of the factor is initially 0.
+
+    This method is used at the initialization of a model. Thus
+    initializing results in a markov network with no edges.
+    """
     def add_literal_factor(self, literal, weight=0):
+
         if not literal.is_literal():
-            print("Problemo")
+            print("Trying to add a literal factor which is not a literal...")
+            return
 
         self.factors.append((literal, weight, literal, literal.val() ))
 
-        if self.dynamic_update:                     # Only when dynamically updating we should change the SDD
+        if self.dynamic_update:
             self.update_sdd()
 
+    """
+    This method adds a compiled factor to the model. A compiled
+    factor should have the following form: (f, w, e, i)
+        - f : Logical rule.
+        - w : Weight of this factor.
+        - e : The encoding of the factor. This MUST be present.  e = (f <=> i)
+        - i : The indicator of the compiled factor. i.e.  i in   e = (f <=> i)
+    """
     def add_compiled_factor(self, factor):
-        self.indicator_manager.increment_variable(factor[3]) # Make sure to increment usage
+        # We need to increment usage of the indicator.
+        self.indicator_manager.increment_variable(factor[3])
+
+        # Add the already compiled factor to the stack.
         self.factor_stack.append(factor)
 
         if self.dynamic_update:
@@ -206,24 +316,35 @@ class Model:
 
         self.nb_factors += 1
 
+    """
+    Add a non-compiled factor to the model.
+        - factor: a logical factor
+        - weight: an initial weight
+    """
     def add_factor(self, factor, weight=0):
+
         if not self.can_add_factors():
-            print(f"Cannot add anymore factors.")
+            print("Adding a factor over the limit.")
             return
 
+        # 1) Encode the factor
         enc, ind = self.encode_factor(factor)
-        self.factor_stack.append((factor, weight, enc, ind))  # Append the factor to the stack
 
-        if self.dynamic_update:                     # Only when dynamically updating we should change the SDD
+        # 2) Append the factor to the stack
+        self.factor_stack.append((factor, weight, enc, ind))
+
+        if self.dynamic_update:
             self.update_sdd()
 
         self.nb_factors += 1
 
     def remove_factor(self, factor):
+
         if not self.factor_present(factor):
             return
 
         self.remove_factor_sdd_indicator(factor[3])    # TODO: remove hard coding
+
         self.nb_factors -= 1
 
     def remove_factor_sdd_indicator(self, indicator):
@@ -287,6 +408,8 @@ class Model:
             left = self.sdd                                    # Current SDD
             right = e.compile(self.mgr)                         # Compile new factor to SDD
 
+
+
             t3=time()
             self.sdd = left & right           # Do the actual conjoining here
             t4 = time()
@@ -331,6 +454,9 @@ class Model:
     def validate_factor(self, factor):
         return True
 
+    def set_count_manager(self, count_manager):
+        self.count_manager = count_manager
+
     def set_indicator_manager(self, indicator_manager):
         if self.nb_factors > 0:
             assert("Cannot change indicator_manager after already using indicators from another manager")
@@ -366,6 +492,7 @@ class Model:
     def get_factor_weights(self):
         # gets only the weights of the encoded factors
         return [w for (_, w, _, _) in self.factors]
+
     def get_weights(self):
         # gets all the weights(included literal weights)
         return self.theory_encoder.get_weights()
@@ -413,6 +540,7 @@ class Model:
     def sdd_size(self):
         if self.sdd == None:
             return 0
+
         return self.sdd.count()
     # ------------------- Evaluation -------------------------
 
@@ -426,7 +554,6 @@ class Model:
                 w_sum += w
 
         print(math.exp(w_sum - ln_Z))
-
         return math.exp(w_sum - ln_Z)
 
     def evaluate(self, world):
@@ -501,7 +628,7 @@ class Model:
         return ret
 
     def pretty_print_all(self):
-        pp =  "__Model__\n"
+        pp =  f"__Model {self.unique_ID}__\n"
         pp += f"->  {self.domain_size} variables\n"
         pp += f"->  {len(self.factors)} factors compiled\n"
         pp += f"->  {len(self.factor_stack)} factors pending\n"

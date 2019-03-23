@@ -63,5 +63,11 @@ class saver:
             self.dump_to_file(direct, k, logbook.get_prop(k))
 
     def dump_to_file(self, direct, name, data):
-
-        np.savetxt(os.path.join(direct, name+".dat"), np.array(data))
+        print("\n".join([
+            f"Saving: {name}",
+            f"-->len: {np.shape(data)}"
+        ]))
+        if len(np.shape(data)) <= 2:
+            np.savetxt(os.path.join(direct, name+".dat"), np.array(data), fmt="%s")
+        else:
+            np.save(os.path.join(direct, name+".dat"), np.array(data))

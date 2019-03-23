@@ -1,17 +1,15 @@
 from logic.factor import factor
-from functools import reduce
 import pysdd
 
-class disj(factor):
-
-    # List should be integers
-    def __init__(self, list_of_factors):
-        self.list_of_factors = list_of_factors
+class impl(factor):
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
         self.cached_sdd = None
         super().__init__()
 
     def to_string(self):
-        return "(" + " | ".join(map(lambda x: x.to_string(), self.list_of_factors)) + ")"
+        return self.left.to_string() + " => " + self.right.to_string()
 
     def ref(self):
 
@@ -35,27 +33,18 @@ class disj(factor):
         self.cached_sdd.deref()
 
     def to_sdd(self, mgr):
-
         if self.cached_sdd != None and not self.cached_sdd.garbage_collected():
             return self.cached_sdd
 
-        sdd_of_factors = map(lambda x: x.to_sdd(mgr), self.list_of_factors)
-        disjunction_of_sdd = reduce( lambda x,y: x | y, sdd_of_factors )
+        self. cached_sdd = mgr.negate(self.left.to_sdd(mgr)) | self.right.to_sdd(mgr)
 
-        self.cached_sdd = disjunction_of_sdd
-
-        return disjunction_of_sdd
+        return self.cached_sdd
 
     def evaluate(self, world):
-        for factor in self.list_of_factors:
-            if factor.evaluate(world) == True:
-                return True
-        return False
+        return not self.left.evaluate(world) or self.right.evaluate(world)
 
     def __eq__(self, other):
-        if not isinstance(other, disj):
+        if not isinstance(other, impl):
             return False
 
-        return self.list_of_factors == other.list_of_factors
-
-    pass
+        return self.left == other.left and self.right == other.right

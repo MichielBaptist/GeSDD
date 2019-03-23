@@ -14,7 +14,9 @@ def read_from_csv_num(path, sep, verbose=True):
     worlds = [[to_boolean_array(w, sep)]*int(n) for (n, w) in worlds]
     worlds = [world for group in worlds for world in group]
     n_worlds, n_vars = np.array(worlds).shape
-    worlds = list_to_tuple_rec(worlds)
+    #worlds = tuple([tuple(world) for world in worlds])
+
+    print(np.shape(worlds))
 
     end = time.time()
 
@@ -23,14 +25,13 @@ def read_from_csv_num(path, sep, verbose=True):
 
     return worlds, n_worlds, n_vars
 
-def read_from_csv(path_to_csv, sep, verbose=False):
+def read_from_csv(path_to_csv, sep, verbose=True):
 
     start = time.time()
 
     csv_file = open(path_to_csv)
-    worlds = [to_boolean_array(world_str, sep) for world_str in csv_file]
+    worlds = [tuple(to_boolean_array(world_str, sep)) for world_str in csv_file]
     n_worlds, n_vars = np.array(worlds).shape
-    wolrds = list_to_tuple_rec(worlds)
 
     end = time.time()
 
@@ -44,7 +45,7 @@ def to_boolean_array(world_str, sep):
     return [str_to_bool(var) for var in world_str.split(sep)]
 
 def str_to_bool(string):
-    return string == "1"
+    return string.strip() == "1"
 
 def notify_loaded(path, n_worlds, n_vars, duration):
     print("--Done loading data--")

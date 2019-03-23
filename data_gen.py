@@ -1,5 +1,8 @@
 import numpy as np
 
+def save(path, dat, delim):
+    np.savetxt(path, dat, fmt = '%i', delimiter=delim)
+
 def gen(model, n_worlds):
 
     # Horribly inefficient method of generating

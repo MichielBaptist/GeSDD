@@ -2,6 +2,7 @@ import numpy as np
 import random
 import utils.string_utils as stru
 
+from functools import reduce
 from matplotlib import pyplot as plt
 from itertools import chain
 
@@ -23,12 +24,14 @@ def run(params):
     n_select = params['n_select']
 
     book = params['logbook']
+    mgr = params['manager']
+    imgr = params['indicator_manager']
 
     population = generator.gen_n(pop_size)
     population = optimize_population(population, train)
     population_fitness = fitness_population(population, fitness, train)
 
-
+    sizes = [model.sdd_size() for model in population]
     lls_t = [model.LL(train) for model in population]
     lls_v = [model.LL(valid) for model in population]
     validation_fitness = fitness_population(population, fitness, valid)
@@ -37,7 +40,10 @@ def run(params):
     book.post(0, "fit_t", population_fitness)
     book.post(0, "ll_v", lls_v)
     book.post(0, "fit_v", validation_fitness)
-
+    book.post(0, "best_ind", population[np.argmax(population_fitness)].to_string())
+    book.post(0, "sizes", sizes)
+    book.post(0, "best_size", sizes[np.argmax(population_fitness)])
+    book.post(0, "best_ind", population[np.argmax(population_fitness)].to_string())
 
     t1 = time.time()
 
@@ -68,7 +74,13 @@ def run(params):
         t5 = time.time()
 
         # 4) Join the population again
-        population = union_of_sets(offspring_of_selected, non_selected_individuals)
+        #   - Non selected individuals
+        #   - Selected individuals
+        #   - Offspring of selected
+        population = union_of_sets( offspring_of_selected,
+                                    non_selected_individuals,
+                                    selected_individuals
+                                    )
 
         t6 = time.time()
 
@@ -77,15 +89,50 @@ def run(params):
 
         t7 = time.time()
 
+        if gen % 2 == 0 and False:
+
+            print("Starting to minimize!")
+
+            for model in population:
+                model.ref()
+
+            mgr.minimize()
+
+            for model in population:
+                model.deref()
+
+            print("done minimizing")
+
+
+
         # 6) Re-optimize the population and calculate fitness
         population = optimize_population(population, train)
+
+        for m in population:
+            if m.LL(train) > 0:
+                print(m.to_string())
+
         population_fitness = fitness_population(population, fitness, train)
+
+        population, population_fitness = kill_population(population, population_fitness, pop_size)
 
         t8 = time.time()
 
         lls_t = [model.LL(train) for model in population]
         lls_v = [model.LL(valid) for model in population]
         validation_fitness = fitness_population(population, fitness, valid)
+        sizes = [model.sdd_size() for model in population]
+        nb_facts = [model.nb_factors for model in population]
+        best_nb_factors = nb_facts[np.argmax(population_fitness)]
+
+        best_index = np.argmax(population_fitness)
+        best_fit_v = validation_fitness[best_index]
+        best_fit_t = population_fitness[best_index]
+        best_ll_t = lls_t[best_index]
+        best_ll_v = lls_v[best_index]
+        best_model = population[best_index].soft_clone()    # not hard clone
+
+        t9 = time.time()
 
         book.post(gen, "ll_t", lls_t)
         book.post(gen, "fit_t",population_fitness)
@@ -99,12 +146,42 @@ def run(params):
         book.post(gen, "time: mutation", t7- t6)
         book.post(gen, "time: fitting", t8- t7)
         book.post(gen, "time: selection", t2- t1)
-        book.post(gen, "time", t8 - t1)
+        book.post(gen, "time", t9 - t1)
+        book.post(gen, "time: extra", t9 - t8)
+        book.post(gen, "sizes", sizes)
+        book.post(gen, "best_size", sizes[np.argmax(population_fitness)])
+        book.post(gen, "best_ind", population[np.argmax(population_fitness)].to_string())
+        book.post(gen, "nb_factors", nb_facts)
+        book.post(gen, "best_nb_factors", best_nb_factors)
+        book.post(gen, "live_size", mgr.live_size())
+        book.post(gen, "dead_size", mgr.dead_size())
+        book.post(gen, "indicator_profile", imgr.profile())
+        book.post(gen, "best_model", (best_model,
+                                      best_fit_v,
+                                      best_fit_t,
+                                      best_ll_v,
+                                      best_ll_t))
 
     return population, population_fitness
 
-def union_of_sets(left, right):
-    return left+right
+def kill_population(population, fitness, pop_size):
+    ordered_population = np.argsort(fitness)
+    top_population = ordered_population[-pop_size:]
+    bot_population = ordered_population[:len(ordered_population)-pop_size]
+
+    survivors = [population[i] for i in top_population]
+    survivors_fitness = [fitness[i] for i in top_population]
+
+    victims = [population[i] for i in bot_population]
+
+    # Kill off the unlucky models
+    for model in victims:
+        model.free()
+
+    return survivors, survivors_fitness
+
+def union_of_sets(*sets):
+    return reduce(lambda x, y: x + y, sets)
 
 def cross_pairs(pairs, cross):
     children = [cross.apply(left, right) for (left, right) in pairs]
@@ -144,8 +221,7 @@ class logbook:
         self.book[it][prop] = items
 
     def get_prop(self, name):
-        all_data = [data[name] for (i, data) in self.book.items() if name in data]
-        return all_data
+        return [data[name] for (i, data) in self.book.items() if name in data]
 
     def get_iteration(self, it):
         return self.book[it]
@@ -158,6 +234,9 @@ class logbook:
         unique_properties = [list(d.keys()) for d in unique_properties]
         unique_properties = set([i for l in unique_properties for i in l])
         return unique_properties
+
+    def __contains__(self, key):
+        return key in self.unique_properties()
 
     def __str__(self):
         n_iter = len(self.book.items())
