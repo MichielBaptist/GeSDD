@@ -9,6 +9,6 @@ python main.py \
 -threshold 0.65 \
 -run_name 5var \
 -cnt no \
--n_gens 2 \
+-n_gens 50 \
 -cnt no \
 -max_nb_f 150
