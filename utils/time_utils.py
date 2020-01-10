@@ -5,6 +5,7 @@ import utils.string_utils as stru
 def get_timer():
     return timer()
 
+"""A simple utility class for timing and creating summary tables in python."""
 class timer:
     def __init__(self):
         self.time = None

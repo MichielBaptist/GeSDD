@@ -1,14 +1,14 @@
 python main.py \
--train data/nltcs/nltcs.ts.data \
--valid data/nltcs/nltcs.valid.data \
+-train data/synth/5var/train.dat \
+-valid data/synth/5var/valid.dat \
 -generator seeded \
 -gamma_mutations 0.10 \
 -gamma_cross 0.10 \
 -candidate_size 3 \
 -alpha 3e-5 \
 -threshold 0.65 \
--run_name nltcs \
+-run_name 5var \
 -cnt no \
--n_gens 300 \
+-n_gens 2 \
 -cnt no \
 -max_nb_f 150
