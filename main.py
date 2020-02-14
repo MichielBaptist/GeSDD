@@ -1,7 +1,6 @@
 # Custom imports
 from gen.gen import random_generator, data_seeded_generator
 
-
 import utils.time_utils as tut
 
 from model.model import Model
