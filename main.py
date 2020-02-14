@@ -132,7 +132,8 @@ parser.add_argument('-cnt',
 
 def __main__(args):
 
-    # Generate a random seed
+    # Generate a random seed, the seed is stored in the parameter list
+    # for reproducibility.
     seed = args.seed
     if seed == None:
         seed = random.randrange(2**20)
@@ -146,24 +147,52 @@ def __main__(args):
     valid_path = args.valid
     train, n_worlds_train, n_vars = IO_manager.read_from_csv(train_path, ',')
     valid, n_worlds_valid, n_vars = IO_manager.read_from_csv(valid_path, ',')
+
     n_worlds = n_worlds_train + n_worlds_valid
     test_train_ratio = n_worlds_valid / n_worlds
 
-    global_max = args.max_nb_f
+    # bot: The lowest possible indicator variable for factors
+    # top: The highest possible indicator variable for factors
     bot = n_vars + 1
-    top = bot + global_max
+    top = bot + args.max_nb_f
+
+    # Initialize the indicator manager. The indicator manager will make sure of:
+    # 1) The maximum allowed amount of factors in total is not exceded.
+    # 2) The same factors will get the same indicator.
+    # 3) Keeps track of which indicators are still available.
+    # These operations are not of theoretical concern, only implementation details.
     imgr  = indicator_manager(range(bot, top))
+    # Initialize the count manager. The count manager simply computes
+    # all datapoints in a binary dataset such that a certain factor is satisfied.
+    #
+    #   S = { x | x \in \mathcal{X}, f(x) = 1}
+    #
+    # As computing the subset of all satisfying datapoints for a given
+    # factor is computationally expensive, there is caching involved.
+    # The implementation of the count manager is not of theoretical concern,
+    # only implementation details. Inspect the count manager class for more details.
     cmgr = count_manager()
 
+    # Compresses a set of binary vectors X = [x, ..., z] to a set of
+    # tuples [(n, x), ..., (m, z)] such
+    # that n is the amount of times x is contained in X
+    #   n = count(x, X)
+    #   m = count(z, X)
+    # This is done for efficiency reasons
     train = cmgr.compress_data_set(train, "train")
     valid = cmgr.compress_data_set(valid, "valid")
 
-    # doesn't use imgr
+    # Select the feature generator. If seeded, the feature generator by
+    # Jan van Haaren et al. If not seeded, use the random subset feature
+    # generator. For more information on these generators, inspect gen/gen.py
     if args.generator == 'seeded':
         gen = data_seeded_generator(train,  None, cmgr, top)
     elif args.generator == 'random':
         gen = random_generator(n_vars, top, cmgr)
 
+    # Compute the empty models log likelihood on the training data.
+    # This value is used in the fitness function of GeSDD. In order to give
+    # more importance to relative differences in log likelihood.
     empty_model = Model(n_vars,
                         manager = SddManager(top),
                         count_manager=cmgr)
@@ -171,6 +200,7 @@ def __main__(args):
     empty_model.fit(train, "train")
     empty_ll = empty_model.LL(train, "train")
     print(f"Empty model LL: {empty_ll}")
+
 
     params = {}
     params['run_folder'] = args.run_folder
@@ -226,9 +256,11 @@ def __main__(args):
     params['valid_file'] = args.valid
     params['candidate_size'] = args.candidate_size
 
-    # Run the algorithm
+    # Run the algorithm, this is whare all of the work is performed.
     pop, params= ga_algorithm.run(params, cnt = (args.cnt == "yes"))
 
+    # Find the base LL for training and validation data.
+    # These are used by data aggregators.
     zero_t_ll = empty_model.LL(train, "train")
     zero_v_ll = empty_model.LL(valid, "valid")
     zero_t_fit = params['fitness'].of(empty_model, train, "train")
@@ -238,8 +270,6 @@ def __main__(args):
     params['logbook'].post(0, "zero_v_ll", zero_v_ll)
     params['logbook'].post(0, "zero_t_fit", zero_t_fit)
     params['logbook'].post(0, "zero_v_fit", zero_v_fit)
-    # ZERO MODEL stuff
-
 
     # Aggregators are a top level decision
     aggregators = [
@@ -259,6 +289,10 @@ def __main__(args):
         aggr.FEATURE_SIZES
     ]
 
+    # Finally, save the run to the "run" folder. The saver will
+    # automatically create a new folder withing "run" based on date and time.
+    # A run.txt file is created, alongside all the output of the aggregators.
+    # The run.txt file contains all the parameters needed to reproduce the run.
     svr = saver("run")
     svr.save_run(params, logbook, aggregators)
 
